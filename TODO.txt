@@ -1,0 +1,16 @@
+Project Template TODO:
+- add dataloaders
+- add utility to find mean/variance across channels of a dataset (for application in transforms)
+- train code
+- logging (like print but more robust)
+- fix logic for start epoch
+
+Helpful links for improving my machine learning workflow
+https://www.reddit.com/r/pytorch/top/?t=all
+https://github.com/mratsim/Amazon-Forest-Computer-Vision/blob/master/src/p_sampler.py
+https://github.com/PyTorchLightning/pytorch-lightning
+https://github.com/sksq96/pytorch-summary
+https://github.com/lanpa/tensorboardX
+https://github.com/IgorSusmelj/pytorch-styleguide
+https://github.com/FrancescoSaverioZuppichini/PyTorch-Deep-Learning-Template/blob/master/main.py
+
