@@ -5,7 +5,7 @@ from utils import pt_util
 
 class AlexNet(nn.Module):
     def __init__(self, input_height=32, input_width=32, input_channels=3, ch=64, output_size=10,
-                 criterion=nn.CrossEntropyLoss):
+                 criterion=nn.CrossEntropyLoss()):
         super(AlexNet, self).__init__()
         self.criterion = criterion
         self.best_accuracy = 0
@@ -41,8 +41,6 @@ class AlexNet(nn.Module):
         return outputs
 
     def loss(self, outputs, targets):
-        print("check outputs", outputs.size())
-        print("check targets", targets.size())
         loss = self.criterion(outputs, targets)
         return loss
 
@@ -140,11 +138,5 @@ def test_alexnet():
 
 
 if __name__ == '__main__':
-    # test_mlp()
+    test_mlp()
     test_alexnet()
-    # x = torch.randn(50, 10)
-    # y = torch.randint(0, 10, size=(50,))
-    # print(x.size(), y.size())
-    # crit = nn.CrossEntropyLoss()
-    # loss = crit(x, y)
-    # print(loss)
