@@ -32,7 +32,7 @@ class BaseModule(nn.Module):
     def forward(self, *input):
         raise NotImplementedError
 
-    def loss(self, prediction, label, reduction='mean'):
+    def criterion(self, prediction, label, reduction='mean'):
         r"""
         Specifies the loss criterion for this neural network model.
 

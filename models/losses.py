@@ -12,6 +12,10 @@ def linear_hinge_loss(output, target):
     return delta.mean()
 
 
+def mean_p_loss(output, target, p) -> float:
+    torch.mean(torch.sum((torch.abs(output-target)**p), dim=1)**(1./p)).item()
+
+
 def square_loss(output, target):
     loss_val = torch.mean((output - target)**2)
     return loss_val

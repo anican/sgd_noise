@@ -1,5 +1,6 @@
 import argparse
 from models import GoogLeNet
+from models import linear_hinge_loss
 import numpy as np
 from project import Project
 import time
@@ -84,19 +85,21 @@ def test(model, device, data_loader, return_images=False, log_interval=None):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='<Add Project Description>')
+    parser = argparse.ArgumentParser(description='SGD Noise Experiments')
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--test_batch_size', type=int, default=10)
-    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=8)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--weight_decay', type=float, default=0.0005)
-    parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--momentum', type=float, default=0.0)
+    parser.add_argument('--neurons', type=int, default=1024)  # number of neurons in hidden layer
     parser.add_argument('--print_interval', type=int, default=100)
+    parser.add_argument('--criterion', type=str, default="cross_entropy")  # 'cross_entropy' or 'linear_hinge'
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
     project = Project()
 
-    # Data Transforms and Datasets
+    # Data Transforms and Dataset
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -113,11 +116,17 @@ if __name__ == '__main__':
     torch_device = torch.device("cuda" if use_cuda else "cpu")
     print('using device', torch_device)
 
-    # Neural Network Model
-    network = GoogLeNet().to(torch_device)
+    # Loss Functions
+    if args.criterion == 'cross_entropy':
+        criterion = nn.CrossEntropyLoss()
+    elif args.criterion == 'linear_hinge':
+        criterion = linear_hinge_loss
+    else:
+        raise ValueError("Invalid criterion!")
+    print("Criterion:", criterion)
 
-    # Loss Functions TODO:
-    criterion = nn.MSELoss()
+    # Neural Network Model
+    network = GoogLeNet(criterion).to(torch_device)
 
     # Create Optimizer
     opt = optim.SGD(network.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
