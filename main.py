@@ -2,7 +2,7 @@ import argparse
 from models import MLP, AlexNet
 from models import linear_hinge_loss
 import numpy as np
-from project import Project
+from paths import ProjectPaths
 import time
 import torch
 from torch import multiprocessing
@@ -12,13 +12,14 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision import datasets
 import traceback
-from utils import pt_util
+from utils import pt_util, sgd_util
 
 
-def train(model, arch_type, curr_device, data_loader, optimizer, curr_epoch, log_interval):
+def train(model, arch_type, curr_device, data_loader, full_loader, optimizer, curr_epoch, log_interval, tail_data):
     model.train()
     losses = []
     for batch_idx, (inputs, label) in enumerate(data_loader):
+        curr_iteration = len(data_loader) * curr_epoch + batch_idx + 1
         inputs, label = inputs.to(curr_device), label.to(curr_device)
         optimizer.zero_grad()
         if arch_type == 'mlp':
@@ -28,6 +29,12 @@ def train(model, arch_type, curr_device, data_loader, optimizer, curr_epoch, log
         losses.append(loss.item())
         loss.backward()
         optimizer.step()
+
+        full_grad_train, sgd_noise_train = sgd_util.get_sgd_noise(model=model, arch_type=arch_type,
+                                                                  curr_device=curr_device, opt=optimizer,
+                                                                  full_loader=full_loader)
+        alpha_train = sgd_util.get_tail_index(sgd_noise=sgd_noise_train)
+        tail_data.append((curr_iteration, torch.norm(sgd_noise_train, dim=1), alpha_train))
         if batch_idx % log_interval == 0:
             print('{} Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 time.ctime(time.time()),
@@ -38,7 +45,7 @@ def train(model, arch_type, curr_device, data_loader, optimizer, curr_epoch, log
 
 def test(model, arch_type, curr_device, data_loader, return_images=False, log_interval=None):
     model.eval()
-    test_loss, correct = 0, 0
+    loss, correct = 0, 0
     correct_images, correct_values, error_images, predicted_values, gt_values = [], [], [], [], []
 
     with torch.no_grad():
@@ -47,11 +54,10 @@ def test(model, arch_type, curr_device, data_loader, return_images=False, log_in
             if arch_type == 'mlp':
                 inputs = inputs.view(inputs.size(0), -1) 
             outputs = model(inputs)
-            # TODO: if the output here is messed up change loss to be from torch.nn.functional to accomodate change in
-            #       reduction or just multiply by batch_size?
+            # TODO: if output here is messed up change loss to be from torch.nn.functional to acc change in reduction
             # test_loss_on = model.loss(outputs, label, reduction='sum').item()
             test_loss_on = model.loss(outputs, label).item()
-            test_loss += test_loss_on
+            loss += test_loss_on
             prediction = outputs.max(1)[1]
             correct_mask = prediction.eq(label.view_as(prediction))
             num_correct = correct_mask.sum().item()
@@ -80,18 +86,18 @@ def test(model, arch_type, curr_device, data_loader, return_images=False, log_in
         correct_values = np.concatenate(correct_values, axis=0)
         gt_values = np.concatenate(gt_values, axis=0)
 
-    test_loss /= len(data_loader.dataset)
-    test_accuracy = 100. * correct / len(data_loader.dataset)
+    loss /= len(data_loader.dataset)
+    accuracy = 100. * correct / len(data_loader.dataset)
 
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(data_loader.dataset), test_accuracy))
+        loss, correct, len(data_loader.dataset), accuracy))
     if return_images:
-        return test_loss, test_accuracy, correct_images, correct_values, error_images, predicted_values, gt_values
+        return loss, accuracy, correct_images, correct_values, error_images, predicted_values, gt_values
     else:
-        return test_loss, test_accuracy
+        return loss, accuracy
 
 
-if __name__ == '__main__':
+def get_arguments():
     parser = argparse.ArgumentParser(description='SGD Noise Experiments')
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--test_batch_size', type=int, default=10)
@@ -106,8 +112,12 @@ if __name__ == '__main__':
     parser.add_argument('--criterion', type=str, default="cross_entropy")  # 'cross_entropy' or 'linear_hinge'
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--architecture', type=str, default='mlp')
-    args = parser.parse_args()
-    project = Project()
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = get_arguments()
+    project_paths = ProjectPaths()
 
     # Data Transforms and Dataset
     transform_train = transforms.Compose([
@@ -117,8 +127,8 @@ if __name__ == '__main__':
     transform_test = transforms.Compose([
         transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
-    data_train = datasets.CIFAR10(root=str(project.DATA_PATH), train=True, download=True, transform=transform_train)
-    data_test = datasets.CIFAR10(root=str(project.DATA_PATH), train=False, download=True, transform=transform_test)
+    data_train = datasets.CIFAR10(root=str(project_paths.DATA_PATH), train=True, download=True, transform=transform_train)
+    data_test = datasets.CIFAR10(root=str(project_paths.DATA_PATH), train=False, download=True, transform=transform_test)
     train_size = data_train.data.shape[0]
     test_size = data_test.data.shape[0]
 
@@ -159,39 +169,42 @@ if __name__ == '__main__':
     train_loader = DataLoader(data_train, batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = DataLoader(data_test, batch_size=args.test_batch_size, shuffle=False, **kwargs)
 
-    # TODO: Why is the batch size for full loader 4096 in cifar_main.py
     train_loader_full = DataLoader(data_train, batch_size=train_size, shuffle=False, **kwargs)
     test_loader_full = DataLoader(data_test, batch_size=test_size, shuffle=False, **kwargs)
 
-    start_epoch = network.load_last_model(str(project.WEIGHTS_PATH))
-    train_losses, test_losses, test_accuracies = pt_util.read_log(str(project.LOG_PATH), ([], [], []))
-    test_loss, test_accuracy = test(network, device, test_loader)
+    start_epoch = network.load_last_model(str(project_paths.WEIGHTS_PATH))
+    train_losses, test_losses, test_accuracies = pt_util.read_log(str(project_paths.LOG_PATH), ([], [], []))
+    test_loss, test_accuracy = test(model=network, arch_type=args.architecture, curr_device=device,
+                                    data_loader=test_loader)
     test_losses.append((start_epoch, test_loss))
     test_accuracies.append((start_epoch, test_accuracy))
+
+    # Stores gradient norms and alphas for each batch iteration during training :)!!
+    train_tail_data = []
 
     try:
         for epoch in range(start_epoch, args.epochs + 1):
             train_loss = train(model=network, arch_type=args.architecture, curr_device=device, data_loader=train_loader,
-                               optimizer=opt, curr_epoch=epoch, log_interval=args.print_interval)
+                               full_loader=train_loader_full, optimizer=opt, curr_epoch=epoch,
+                               log_interval=args.print_interval, tail_data=train_tail_data)
             test_loss, test_accuracy = test(model=network, arch_type=args.architecture, curr_device=device,
                                             data_loader=test_loader)
             train_losses.append((epoch, train_loss))
             test_losses.append((epoch, test_loss))
             test_accuracies.append((epoch, test_accuracy))
-            pt_util.write_log(str(project.LOG_PATH), (train_losses, test_losses, test_accuracies))
-            network.save_best_model(test_accuracy, str(project.WEIGHTS_PATH) + '/%03d.pt' % epoch)
+            pt_util.write_log(str(project_paths.LOG_PATH), (train_losses, test_losses, test_accuracies))
+            sgd_util.write_tail_data(train_tail_data, str(project_paths.TAILS_PATH) + '/tails%03d.pt' % epoch)
+            network.save_best_model(test_accuracy, str(project_paths.WEIGHTS_PATH) + '/weights%03d.pt' % epoch)
     except KeyboardInterrupt as ke:
         print('Manually interrupted execution...')
     except:
         traceback.print_exc()
     finally:
-        # TODO: Shouldn't this be saved to most recent epoch
         print('Saving model in its current state')
-        network.save_model(str(project.WEIGHTS_PATH) + '/%03d.pt' % epoch, 0)
+        network.save_model(str(project_paths.WEIGHTS_PATH) + '/%03d.pt' % epoch, 0)
         ep, val = zip(*train_losses)
         pt_util.plot(ep, val, 'Train loss', 'Epoch', 'Error')
         ep, val = zip(*test_losses)
         pt_util.plot(ep, val, 'Test loss', 'Epoch', 'Error')
         ep, val = zip(*test_accuracies)
         pt_util.plot(ep, val, 'Test accuracy', 'Epoch', 'Error')
-
