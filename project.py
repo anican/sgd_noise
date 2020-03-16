@@ -8,6 +8,7 @@ class Project:
     DATA_PATH: Path = BASE_PATH / 'data'  # where the datasets and data relevant information is stored
     LOG_PATH: Path = DATA_PATH / 'log.pkl'  # store relevant info for logging: train loss, test loss, test acc is stored
     WEIGHTS_PATH = DATA_PATH / 'checkpoints'  # store the trained parameters of the model
+    NORMS_PATH = DATA_PATH / 'noise_norms'  # store the noise norms at each epoch AND the associated alpha estimators
 
     def __post_init__(self):
         self.DATA_PATH.mkdir(exist_ok=True)
