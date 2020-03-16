@@ -3,6 +3,19 @@ import numpy as np
 import torch
 
 
+def write_tail_data(tail_data, tail_path: str):
+    """
+    Writes the given data to the given path in a format such that it can be reconstructed for future analysis.
+
+    :param tail_data: 3-tuple of list of tensors (iterations, norms, alphas)
+    :param tail_path: file path where the tail-index relevant data is stored
+    :return:
+    """
+    iterations, grad_norms, alphas = zip(*tail_data)
+    tail_data_history = {"Iterations": iterations, "SGD Norms":grad_norms, "Alpha Estimates":alphas}
+    torch.save(tail_data_history, tail_path)
+
+
 def get_tail_index(sgd_noise):
     """
     Returns an estimate of the tail-index term of the alpha-stable distribution for the stochastic gradient noise.
@@ -17,8 +30,9 @@ def get_tail_index(sgd_noise):
     K = len(X)
     if len(X.shape)>1:
         X = X.squeeze()
-    K1 = int(np.floor(np.sqrt(K))); K2 = K1
-    X = X[:K1*K2].reshape((K2,K1))
+    K1 = int(np.floor(np.sqrt(K)))
+    K2 = K1
+    X = X[:K1*K2].reshape((K2, K1))
     Y = X.sum(1)
     # X = X.cpu().clone(); Y = Y.cpu().clone()
     a = torch.log(torch.abs(Y)).mean()
