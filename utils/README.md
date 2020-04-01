@@ -7,6 +7,6 @@ gradient noise vectors, and savaing/restoring tail index related information.
 
 ## pt_util
 PyTorch utility code for quickly 
-[-] Visualizing training and testing plots in matplotlib
-[-] Restoring and saving neural network models
-[-] Visualizing data from CIFAR10
+-[] Visualizing training and testing plots in matplotlib
+-[] Restoring and saving neural network models
+-[] Visualizing data from CIFAR10
