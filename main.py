@@ -52,7 +52,7 @@ def test(model, arch_type, curr_device, data_loader, return_images=False, log_in
         for batch_idx, (inputs, label) in enumerate(data_loader):
             inputs, label = inputs.to(curr_device), label.to(curr_device)
             if arch_type == 'mlp':
-                inputs = inputs.view(inputs.size(0), -1) 
+                inputs = inputs.view(inputs.size(0), -1)
             outputs = model(inputs)
             # TODO: if output here is messed up change loss to be from torch.nn.functional to acc change in reduction
             # test_loss_on = model.loss(outputs, label, reduction='sum').item()
@@ -100,7 +100,7 @@ def test(model, arch_type, curr_device, data_loader, return_images=False, log_in
 def get_arguments():
     parser = argparse.ArgumentParser(description='SGD Noise Experiments')
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--test_batch_size', type=int, default=10)
+    parser.add_argument('--test_batch_size', type=int, default=64)
     parser.add_argument('--epochs', type=int, default=8)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
